@@ -6,8 +6,8 @@
  *
  * Unit stats (kept small so a game ends in several Advances, not dozens):
  *   melee   3g  HP 7   ATK 4   ship 8   moves 1/turn
- *   defense 2g  HP 12  ATK 2   ship 5   moves every 2nd resolve
- *   ranged  4g  HP 5   ATK 4   no ship  never moves; shots only on own half
+ *   defense 2g  HP 12  ATK 2   ship 5   moves 1/turn
+ *   ranged  4g  HP 5   ATK 4   no ship  walks on own half up to the midline; shots only on own half
  *   cannon  3g  instant 5 dmg to an enemy unit (MAY reach enemy half)
  *   trap    2g  4 dmg + halt when an enemy is on / steps onto the cell
  *
@@ -410,8 +410,8 @@
   }
 
   /**
-   * End the current player's placement.
-   * Left DONE -> right-place. Right ADVANCE -> resolve (caller runs resolveTurn).
+   * End the current side's placement.
+   * Left done -> right-place (bot then deploys). Right done -> resolve.
    */
   function endPlacement(state) {
     var s = clone(state);
@@ -504,7 +504,7 @@
     });
     removeDead(s, events);
 
-    // c. Movement (melee every turn; defense every 2nd resolve; ranged never)
+    // c. Movement (melee and defense every turn; ranged walks only on own half)
     events.push({ type: "phase", name: "move" });
     // Process from front to back so blockers are consistent: left units
     // in descending cell, right units in ascending cell (closest to enemy first).
@@ -520,32 +520,21 @@
       u = findUnit(s, u.id);
       if (!u || u.hp <= 0) return;
 
-      if (u.type === "ranged") {
-        // Hard rule: ranged never walks, and never ends on the enemy half.
-        if (isEnemyHalf(u.player, u.cell)) {
-          // Safety snap (should never happen)
-          u.cell = u.player === "left" ? MID_LEFT : MID_RIGHT;
-        }
-        return;
-      }
-
-      var willMove = false;
-      if (u.type === "melee") {
-        willMove = !u.halted;
-      } else if (u.type === "defense") {
-        u.moveCharge += 1;
-        willMove = !u.halted && u.moveCharge >= 2;
-        if (willMove) u.moveCharge = 0;
+      if (isEnemyHalf(u.player, u.cell) && u.type === "ranged") {
+        // Safety snap (should never happen): ranged never ends on the enemy half.
+        u.cell = u.player === "left" ? MID_LEFT : MID_RIGHT;
       }
 
       if (u.halted) {
         u.halted = false;
         return;
       }
-      if (!willMove) return;
 
       var dest = u.cell + dirOf(u.player);
       if (dest < 0 || dest > 11) return;
+      // Hard rule: ranged may walk forward on their own half, but cannot
+      // cross the midline. They hold on the last own-half cell and shoot.
+      if (u.type === "ranged" && !isOwnHalf(u.player, dest)) return;
       var blocker = unitAt(s, u.lane, dest);
       if (blocker) {
         // Fight instead of stacking (they already swung if adjacent).
@@ -609,8 +598,272 @@
     return { state: s, events: events };
   }
 
+
+  function midEdge(player) {
+    return player === "left" ? MID_LEFT : MID_RIGHT;
+  }
+
+  function rightmostEmpty(state, lane) {
+    var cells = ownHalfCells("right");
+    for (var i = cells.length - 1; i >= 0; i--) {
+      if (cellEmptyForPlace(state, lane, cells[i])) return cells[i];
+    }
+    return null;
+  }
+
+  function lanePlayerDefense(state, lane) {
+    var score = 0;
+    var i, u, t;
+    for (i = 0; i < state.units.length; i++) {
+      u = state.units[i];
+      if (u.lane !== lane || u.hp <= 0) continue;
+      if (u.player === "left") {
+        if (u.type === "defense") score += 4;
+        else if (u.type === "melee") score += 3;
+        else score += 2;
+      } else {
+        score -= 1;
+      }
+    }
+    for (i = 0; i < state.traps.length; i++) {
+      t = state.traps[i];
+      if (t.lane === lane && t.player === "left") score += 2;
+    }
+    return score;
+  }
+
+  function leftThreatInLane(state, lane) {
+    var best = null;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.lane !== lane || u.hp <= 0 || u.player !== "left") continue;
+      if (!best || u.cell > best.cell) best = u;
+    }
+    return best;
+  }
+
+  function pickCannonTarget(state) {
+    var list = legalCells(state, "right", "cannon");
+    var best = null;
+    var bestScore = -1;
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var u = unitAt(state, c.lane, c.cell);
+      if (!u || u.player !== "left") continue;
+      var kill = u.hp <= CARDS.cannon.damage;
+      var nearShip = u.cell >= 8;
+      if (!kill && !nearShip) continue;
+      var score = (kill ? 20 : 0) + u.cell + (u.type === "melee" ? 3 : u.type === "defense" ? 2 : 1);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  function pickTrapCell(state) {
+    var best = null;
+    var bestCell = -1;
+    for (var lane = 0; lane < LANES; lane++) {
+      var threat = leftThreatInLane(state, lane);
+      if (!threat) continue;
+      var dest = threat.cell + 1; // left units walk toward 11
+      if (!isOwnHalf("right", dest)) continue;
+      if (!cellEmptyForPlace(state, lane, dest)) continue;
+      if (dest > bestCell) {
+        bestCell = dest;
+        best = { lane: lane, cell: dest };
+      }
+    }
+    return best;
+  }
+
+  function pickReactiveDefense(state) {
+    var best = null;
+    var bestScore = -1;
+    for (var lane = 0; lane < LANES; lane++) {
+      var threat = leftThreatInLane(state, lane);
+      if (!threat) continue;
+      var incoming = threat.type === "melee" || threat.cell >= MID_LEFT;
+      if (!incoming) continue;
+      var hasDef = state.units.some(function (u) {
+        return u.player === "right" && u.lane === lane && u.type === "defense" && u.hp > 0;
+      });
+      if (hasDef) continue;
+      var cell = rightmostEmpty(state, lane);
+      if (cell == null) continue;
+      var score = threat.cell + (threat.type === "melee" ? 5 : 2);
+      if (score > bestScore) {
+        bestScore = score;
+        best = { lane: lane, cell: cell };
+      }
+    }
+    return best;
+  }
+
+  function pickReactiveRanged(state) {
+    var need = state.units.some(function (u) {
+      return u.player === "left" && u.hp > 0 && u.cell >= MID_LEFT;
+    });
+    if (!need) return null;
+    var best = null;
+    var bestScore = -1;
+    for (var lane = 0; lane < LANES; lane++) {
+      var threat = leftThreatInLane(state, lane);
+      if (!threat || threat.cell < MID_LEFT) continue;
+      var hasRanged = state.units.some(function (u) {
+        return u.player === "right" && u.lane === lane && u.type === "ranged" && u.hp > 0;
+      });
+      if (hasRanged) continue;
+      var cell = rightmostEmpty(state, lane);
+      if (cell == null) continue;
+      if (scoreLaneForRanged(threat) > bestScore) {
+        bestScore = scoreLaneForRanged(threat);
+        best = { lane: lane, cell: cell };
+      }
+    }
+    return best;
+  }
+
+  function scoreLaneForRanged(threat) {
+    return threat ? threat.cell : -1;
+  }
+
+  function pickAttackLane(state) {
+    var bestLane = 0;
+    var bestScore = Infinity;
+    for (var lane = 0; lane < LANES; lane++) {
+      if (rightmostEmpty(state, lane) == null) continue;
+      var score = lanePlayerDefense(state, lane);
+      if (score < bestScore || (score === bestScore && lane < bestLane)) {
+        bestScore = score;
+        bestLane = lane;
+      }
+    }
+    if (rightmostEmpty(state, bestLane) == null) return null;
+    return bestLane;
+  }
+
+  function pickMeleePlace(state) {
+    var lane = pickAttackLane(state);
+    if (lane == null) return null;
+    var cell = rightmostEmpty(state, lane);
+    if (cell == null) return null;
+    return { lane: lane, cell: cell };
+  }
+
+  function pickProactiveDefense(state) {
+    var lane = pickAttackLane(state);
+    if (lane == null) return null;
+    var cell = rightmostEmpty(state, lane);
+    if (cell == null) return null;
+    return { lane: lane, cell: cell };
+  }
+
+  function chooseNextAiPlay(state) {
+    if (state.winner || state.phase !== "right-place") return null;
+
+    if (canPlay(state, "right", "cannon")) {
+      var cannon = pickCannonTarget(state);
+      if (cannon) return { card: "cannon", lane: cannon.lane, cell: cannon.cell };
+    }
+
+    if (canPlay(state, "right", "trap")) {
+      var trap = pickTrapCell(state);
+      if (trap) return { card: "trap", lane: trap.lane, cell: trap.cell };
+    }
+
+    if (canPlay(state, "right", "defense")) {
+      var def = pickReactiveDefense(state);
+      if (def) return { card: "defense", lane: def.lane, cell: def.cell };
+    }
+
+    if (canPlay(state, "right", "ranged")) {
+      var ranged = pickReactiveRanged(state);
+      if (ranged) return { card: "ranged", lane: ranged.lane, cell: ranged.cell };
+    }
+
+    if (canPlay(state, "right", "melee")) {
+      var melee = pickMeleePlace(state);
+      if (melee) return { card: "melee", lane: melee.lane, cell: melee.cell };
+    }
+
+    // Melee is on cooldown or unaffordable: send a walking defense down a weak lane.
+    if (canPlay(state, "right", "defense")) {
+      var extra = pickProactiveDefense(state);
+      if (extra) return { card: "defense", lane: extra.lane, cell: extra.cell };
+    }
+
+    return null;
+  }
+
+  /**
+   * Planned bot placements for the current right-place phase.
+   * Deterministic, own-half only (cannon may target the player's half).
+   */
+  function planAiPlays(state) {
+    var s = clone(state);
+    var plays = [];
+    if (s.phase !== "right-place" || s.winner) return plays;
+    for (var n = 0; n < 8; n++) {
+      var play = chooseNextAiPlay(s);
+      if (!play) break;
+      var r = playCard(s, "right", play.card, play.lane, play.cell);
+      if (!r.ok) break;
+      s = r.state;
+      plays.push({ card: play.card, lane: play.lane, cell: play.cell });
+    }
+    return plays;
+  }
+
+  function applyAiPlacement(state) {
+    var s = clone(state);
+    var plays = [];
+    var events = [];
+    if (s.phase !== "right-place" || s.winner) {
+      return { state: s, plays: plays, events: events };
+    }
+    var planned = planAiPlays(s);
+    for (var i = 0; i < planned.length; i++) {
+      var play = planned[i];
+      var r = playCard(s, "right", play.card, play.lane, play.cell);
+      if (!r.ok) break;
+      s = r.state;
+      plays.push(play);
+      for (var j = 0; j < r.events.length; j++) events.push(r.events[j]);
+    }
+    return { state: s, plays: plays, events: events };
+  }
+
+  /**
+   * Player-vs-bot advance: finish the human (left) placement, let the bot
+   * deploy on the right, then mark the turn ready to resolve.
+   */
+  function playerAdvance(state) {
+    var s = clone(state);
+    if (s.phase !== "left-place" || s.winner) {
+      return { ok: false, state: s, shouldResolve: false, plays: [], events: [] };
+    }
+    var a = endPlacement(s);
+    s = a.state;
+    var ai = applyAiPlacement(s);
+    s = ai.state;
+    var b = endPlacement(s);
+    s = b.state;
+    return {
+      ok: true,
+      state: s,
+      shouldResolve: b.shouldResolve,
+      plays: ai.plays,
+      events: ai.events,
+    };
+  }
+
   return {
     LANES: LANES,
+    HUMAN: "left",
+    AI: "right",
     CELLS: CELLS,
     MID_LEFT: MID_LEFT,
     MID_RIGHT: MID_RIGHT,
@@ -641,5 +894,9 @@
     playCard: playCard,
     endPlacement: endPlacement,
     resolveTurn: resolveTurn,
+    planAiPlays: planAiPlays,
+    applyAiPlacement: applyAiPlacement,
+    playerAdvance: playerAdvance,
+    midEdge: midEdge,
   };
 });

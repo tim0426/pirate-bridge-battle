@@ -62,6 +62,23 @@ html, body {
 }
 .ship-hp .skull,
 .ship-hp .flag { font-size: 16px; }
+.side-tag {
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  padding: 3px 5px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.side-tag.you {
+  background: #c43a2b;
+  color: #fff4d0;
+}
+.side-tag.bot {
+  background: #1d5aa0;
+  color: #e8f2ff;
+}
 
 .bar-wrap {
   position: relative;
@@ -289,6 +306,7 @@ html, body {
   .card .name { font-size: 6px; }
   #advance-btn { font-size: 9px; padding: 8px 12px; }
   #hud { grid-template-columns: minmax(80px, 1.1fr) auto 1fr auto minmax(80px, 1.1fr); }
+  .side-tag { font-size: 6px; padding: 2px 4px; }
 }
 
 .overlay {

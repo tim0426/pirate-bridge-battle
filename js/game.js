@@ -84,7 +84,6 @@
     currentPlayer = "left";
     document.getElementById("overlay-start").classList.remove("show");
     document.getElementById("overlay-end").classList.remove("show");
-    document.getElementById("overlay-pass").classList.remove("show");
     windowResized();
     syncDom();
   }
@@ -92,10 +91,6 @@
   function bindDom() {
     document.getElementById("start-btn").addEventListener("click", startMatch);
     document.getElementById("again-btn").addEventListener("click", startMatch);
-    document.getElementById("ready-btn").addEventListener("click", function () {
-      document.getElementById("overlay-pass").classList.remove("show");
-      syncDom();
-    });
     document.getElementById("advance-btn").addEventListener("click", onAdvance);
     document.getElementById("cards").addEventListener("click", function (ev) {
       var card = ev.target.closest(".card");
@@ -140,14 +135,13 @@
   }
 
   function activePlayer() {
-    if (!state) return "left";
-    if (state.phase === "right-place") return "right";
+    // PvE: the human always plays the left side.
     return "left";
   }
 
   function onCardTap(id) {
     if (!state || anim || state.winner) return;
-    if (state.phase !== "left-place" && state.phase !== "right-place") return;
+    if (state.phase !== "left-place") return;
     var p = activePlayer();
     if (!R.canPlay(state, p, id) && selectedCard !== id) return;
     if (selectedCard === id) {
@@ -161,34 +155,29 @@
 
   function onAdvance() {
     if (!state || anim || state.winner) return;
-    if (state.phase === "left-place") {
-      var done = R.endPlacement(state);
-      state = done.state;
-      display = R.clone(state);
-      selectedCard = null;
-      inspectUnitId = null;
-      currentPlayer = "right";
-      document.getElementById("pass-text").textContent = "Pass the device";
-      document.getElementById("pass-sub").textContent = "Hand it to the Right player (blue ship).";
-      document.getElementById("overlay-pass").classList.add("show");
-      syncDom();
-      return;
-    }
-    if (state.phase === "right-place") {
-      var end = R.endPlacement(state);
-      state = end.state;
-      display = R.clone(state);
-      selectedCard = null;
-      inspectUnitId = null;
-      if (end.shouldResolve) beginResolve();
-      else syncDom();
-    }
+    if (state.phase !== "left-place") return;
+    selectedCard = null;
+    inspectUnitId = null;
+    currentPlayer = "left";
+    var result = R.playerAdvance(state);
+    if (!result.ok) return;
+    state = result.state;
+    display = R.clone(state);
+    (result.events || []).forEach(function (ev) {
+      if (ev.type === "cannon") playCannonFx(ev, "right");
+    });
+    if (result.shouldResolve) beginResolve(result.plays, result.events);
+    else syncDom();
   }
 
-  function beginResolve() {
+  function beginResolve(aiPlays, aiEvents) {
     var result = R.resolveTurn(state);
+    var events = result.events.slice();
+    if (aiPlays && aiPlays.length) {
+      events.unshift({ type: "phase", name: "deploy" });
+    }
     anim = {
-      events: result.events.slice(),
+      events: events,
       final: result.state,
       pre: R.clone(display),
       i: 0,
@@ -315,11 +304,11 @@
       title.textContent = "Draw!";
       sub.textContent = "Both ships went down.";
     } else if (state.winner === "left") {
-      title.textContent = "Left pirate wins!";
-      sub.textContent = "The blue ship is sunk.";
+      title.textContent = "You win!";
+      sub.textContent = "The navy ship is sunk.";
     } else {
-      title.textContent = "Right navy wins!";
-      sub.textContent = "The black-sail ship is sunk.";
+      title.textContent = "The navy wins";
+      sub.textContent = "Your ship is sunk.";
     }
     document.getElementById("overlay-end").classList.add("show");
   }
@@ -397,7 +386,7 @@
     if (now - lastPointer < 250) return;
     lastPointer = now;
     if (!state || anim || state.winner) return;
-    if (state.phase !== "left-place" && state.phase !== "right-place") return;
+    if (state.phase !== "left-place") return;
     var rect = cnv.elt.getBoundingClientRect();
     var x = ((ev.clientX - rect.left) * width) / Math.max(1, rect.width);
     var y = ((ev.clientY - rect.top) * height) / Math.max(1, rect.height);
@@ -437,9 +426,8 @@
   function playCannonFx(ev, player) {
     if (!ev) return;
     flashes.push({ kind: "cannon", ev: ev, player: player, t: 0, life: 28 });
-    if (ev.damage && ev.targetId) {
-      var t = findDisp(ev.targetId);
-      if (t) spawnFloat(ev.lane, ev.cell, "-" + ev.damage, "#ffb347");
+    if (ev.damage) {
+      spawnFloat(ev.lane, ev.cell, "-" + ev.damage, "#ffb347");
     }
   }
 
@@ -594,9 +582,9 @@
     textStyle(BOLD);
     var labY = L.gridY + L.gridH + 4;
     if (labY + 12 < height) {
-      var placing = state && !anim && (state.phase === "left-place" || state.phase === "right-place");
-      var leftLab = !placing ? "LEFT HALF" : p === "left" ? "YOUR HALF · place here" : "ENEMY HALF";
-      var rightLab = !placing ? "RIGHT HALF" : p === "right" ? "YOUR HALF · place here" : "ENEMY HALF";
+      var placing = state && !anim && state.phase === "left-place";
+      var leftLab = placing ? "YOUR HALF · place here" : "YOUR HALF";
+      var rightLab = "BOT HALF";
       text(leftLab, L.gridX + L.cellW * 3, labY);
       text(rightLab, L.gridX + L.cellW * 9, labY);
     }
@@ -604,7 +592,7 @@
 
   function legalSet() {
     if (!state || !selectedCard) return {};
-    if (state.phase !== "left-place" && state.phase !== "right-place") return {};
+    if (state.phase !== "left-place") return {};
     var list = R.legalCells(state, activePlayer(), selectedCard);
     var map = {};
     list.forEach(function (c) {
@@ -616,7 +604,7 @@
   function shotCellsToShow() {
     var cells = null;
     var lane = null;
-    if (selectedCard === "ranged" && (state.phase === "left-place" || state.phase === "right-place")) {
+    if (selectedCard === "ranged" && state.phase === "left-place") {
       // Show the whole own-half as the legal shot area while the card is selected.
       cells = R.ownHalfCells(activePlayer());
       return { cells: cells, lane: "all" };
@@ -632,7 +620,6 @@
 
   function drawHighlights(L) {
     var legal = legalSet();
-    var p = activePlayer();
     noStroke();
     if (selectedCard && selectedCard !== "cannon") {
       for (var lane = 0; lane < 3; lane++) {
@@ -730,20 +717,22 @@
       anim &&
       anim.shot &&
       anim.shot.ev.shooterId === u.id;
+    var moving = anim && anim.move && anim.move.ev.unitId === u.id;
     if (u.type === "ranged") {
       if (shooting) {
         var fi = Math.min(5, Math.floor((anim.shot.t / anim.shot.dur) * 6));
         return { img: sprites["ranged-shoot"][fi], shoot: true };
       }
-      return { img: sprites["ranged-walk"][Math.floor(tick / 8) % 6], shoot: false };
+      var ridx = moving ? Math.floor(tick / 5) % 6 : Math.floor(tick / 8) % 6;
+      return { img: sprites["ranged-walk"][ridx], shoot: false };
     }
     if (u.type === "melee") {
-      var moving = anim && anim.move && anim.move.ev.unitId === u.id;
       var idx = moving ? Math.floor(tick / 5) % 6 : Math.floor(tick / 10) % 6;
       return { img: sprites.melee[idx], shoot: false };
     }
     if (u.type === "defense") {
-      return { img: sprites.defense[Math.floor(tick / 10) % 6], shoot: false };
+      var didx = moving ? Math.floor(tick / 5) % 6 : Math.floor(tick / 10) % 6;
+      return { img: sprites.defense[didx], shoot: false };
     }
     return { img: null, shoot: false };
   }
@@ -880,8 +869,8 @@
     document.getElementById("gold-left").textContent = gL + "/" + R.GOLD_CAP;
     document.getElementById("gold-right").textContent = gR + "/" + R.GOLD_CAP;
     var p = activePlayer();
-    document.getElementById("gold-left").parentElement.classList.toggle("active", p === "left" && !anim);
-    document.getElementById("gold-right").parentElement.classList.toggle("active", p === "right" && !anim);
+    document.getElementById("gold-left").parentElement.classList.toggle("active", !anim && !state.winner && state.phase === "left-place");
+    document.getElementById("gold-right").parentElement.classList.remove("active");
     document.getElementById("turn-label").textContent = "TURN " + state.turn;
 
     var btn = document.getElementById("advance-btn");
@@ -894,10 +883,6 @@
       btn.textContent = "OVER";
       btn.classList.remove("resolve-ready");
     } else if (state.phase === "left-place") {
-      btn.disabled = false;
-      btn.textContent = "DONE";
-      btn.classList.remove("resolve-ready");
-    } else if (state.phase === "right-place") {
       btn.disabled = false;
       btn.textContent = "ADVANCE";
       btn.classList.add("resolve-ready");
@@ -915,9 +900,7 @@
       }
       phase.textContent = lastPhase;
     } else if (state.phase === "left-place") {
-      phase.textContent = "Left pirate — select a card, then a green cell.";
-    } else if (state.phase === "right-place") {
-      phase.textContent = "Right navy — select a card, then a green cell. Then ADVANCE.";
+      phase.textContent = "Your turn — select a card, then a green cell on your half. Tap ADVANCE when ready.";
     } else if (state.winner) {
       phase.textContent = "Battle over.";
     } else {
@@ -942,10 +925,11 @@
   }
 
   function phaseName(name) {
+    if (name === "deploy") return "The navy deploys!";
     if (name === "traps") return "Traps spring!";
     if (name === "ranged") return "Muskets fire — only up to the midline.";
     if (name === "melee") return "Close combat!";
-    if (name === "move") return "Units step forward.";
+    if (name === "move") return "Units walk forward.";
     if (name === "ships") return "Ships take fire!";
     if (name === "income") return "Gold +2 (max 12).";
     return "Resolving…";

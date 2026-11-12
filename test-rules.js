@@ -49,9 +49,45 @@ console.log("=== ranged placement & shots ===");
   assert(rshots.indexOf(5) < 0 && rshots.indexOf(0) < 0, "right cannot target 0–5");
 })();
 
-console.log("=== ranged never walks / never hits enemy half ===");
+console.log("=== ranged walks on own half, holds at mid, never hits enemy half ===");
 (function () {
   var s = R.createState();
+  s = place(s, "left", "ranged", 0, 2);
+  var res = R.resolveTurn(s);
+  var ranged = res.state.units.filter(function (u) { return u.type === "ranged"; })[0];
+  eq(ranged.cell, 3, "left ranged stepped 2→3");
+  res = R.resolveTurn(res.state);
+  ranged = res.state.units.filter(function (u) { return u.type === "ranged"; })[0];
+  eq(ranged.cell, 4, "left ranged stepped 3→4");
+  res = R.resolveTurn(res.state);
+  ranged = res.state.units.filter(function (u) { return u.type === "ranged"; })[0];
+  eq(ranged.cell, 5, "left ranged stepped 4→5 (mid edge)");
+  res = R.resolveTurn(res.state);
+  ranged = res.state.units.filter(function (u) { return u.type === "ranged"; })[0];
+  eq(ranged.cell, 5, "left ranged holds at cell 5 and does not cross");
+  assert(R.isOwnHalf("left", ranged.cell), "ranged still on own half");
+  assert(ranged.cell <= 5, "ranged never entered enemy half");
+
+  // Mirror: right ranged walks toward mid (cell 6) and holds
+  var sR = R.createState();
+  sR.phase = "right-place";
+  sR = place(sR, "right", "ranged", 1, 9);
+  res = R.resolveTurn(sR);
+  var rr = res.state.units[0];
+  eq(rr.cell, 8, "right ranged stepped 9→8");
+  res = R.resolveTurn(res.state);
+  rr = res.state.units[0];
+  eq(rr.cell, 7, "right ranged stepped 8→7");
+  res = R.resolveTurn(res.state);
+  rr = res.state.units[0];
+  eq(rr.cell, 6, "right ranged stepped 7→6 (mid edge)");
+  res = R.resolveTurn(res.state);
+  rr = res.state.units[0];
+  eq(rr.cell, 6, "right ranged holds at cell 6 and does not cross");
+  assert(R.isOwnHalf("right", rr.cell), "right ranged still on own half");
+
+  // Shots still cannot reach past the midline, even from the mid edge
+  s = R.createState();
   s = place(s, "left", "ranged", 0, 5); // mid-edge
   s.phase = "right-place";
   // Enemy melee on cell 8 (enemy half for left) and also one that crossed to cell 4
@@ -68,11 +104,11 @@ console.log("=== ranged never walks / never hits enemy half ===");
     halted: false,
     moveCharge: 0,
   });
-  var res = R.resolveTurn(s);
+  res = R.resolveTurn(s);
   s = res.state;
-  var ranged = s.units.filter(function (u) { return u.type === "ranged"; })[0];
+  ranged = s.units.filter(function (u) { return u.type === "ranged"; })[0];
   assert(ranged, "ranged still on board");
-  eq(ranged.cell, 5, "ranged did not walk (stays on 5)");
+  eq(ranged.cell, 5, "ranged already at mid edge stays on 5");
   assert(R.isOwnHalf("left", ranged.cell), "ranged still on own half");
 
   var shots = res.events.filter(function (e) { return e.type === "shot"; });
@@ -136,7 +172,7 @@ console.log("=== melee walks 1, stops at enemy, hits ship on cell 11 ===");
   eq(res.state.hp.right, 40 - 8, "right ship took 8");
 })();
 
-console.log("=== defense is slow; ranged never moves after many resolves ===");
+console.log("=== defense walks every Advance; ranged walks but not across mid ===");
 (function () {
   var s = R.createState();
   s = place(s, "left", "defense", 0, 3);
@@ -146,13 +182,16 @@ console.log("=== defense is slow; ranged never moves after many resolves ===");
   var r1 = R.resolveTurn(s);
   var d = r1.state.units.filter(function (u) { return u.type === "defense"; })[0];
   var rg = r1.state.units.filter(function (u) { return u.type === "ranged"; })[0];
-  eq(d.cell, 3, "defense does not move on first resolve");
-  eq(rg.cell, 8, "ranged does not move on first resolve");
+  eq(d.cell, 4, "defense stepped 3→4 on first resolve");
+  eq(rg.cell, 7, "right ranged stepped 8→7 on first resolve");
   var r2 = R.resolveTurn(r1.state);
   d = r2.state.units.filter(function (u) { return u.type === "defense"; })[0];
   rg = r2.state.units.filter(function (u) { return u.type === "ranged"; })[0];
-  eq(d.cell, 4, "defense moves on second resolve");
-  eq(rg.cell, 8, "ranged still has not moved");
+  eq(d.cell, 5, "defense stepped 4→5 on second resolve");
+  eq(rg.cell, 6, "right ranged stepped 7→6 (mid edge)");
+  var r3 = R.resolveTurn(r2.state);
+  rg = r3.state.units.filter(function (u) { return u.type === "ranged"; })[0];
+  eq(rg.cell, 6, "right ranged holds at 6 and does not enter the player half");
 })();
 
 console.log("=== trap triggers on step and is consumed ===");
@@ -226,7 +265,7 @@ console.log("=== fight instead of stacking ===");
   var left = res.state.units.filter(function (u) { return u.player === "left"; })[0];
   var right = res.state.units.filter(function (u) { return u.player === "right"; })[0];
   eq(left.cell, 5, "melee did not stack onto the defense");
-  eq(right.cell, 6, "defense stayed (first resolve, no move)");
+  eq(right.cell, 6, "defense stayed (blocked by adjacent melee)");
   // melee 4 vs defense (no bonus) -> def hp 8; defense 3 vs melee (counter) -> melee hp 4
   eq(right.hp, 8, "defense took 4");
   eq(left.hp, 4, "melee took 3 (defense effective)");
@@ -257,6 +296,89 @@ console.log("=== endPlacement loop ===");
   var b = R.endPlacement(a.state);
   eq(b.state.phase, "resolve", "right done -> resolve");
   assert(b.shouldResolve, "right done should resolve");
+})();
+
+console.log("=== playerAdvance is PvE: bot deploys, then resolve ===");
+(function () {
+  var s = R.createState();
+  var a = R.playerAdvance(s);
+  assert(a.ok, "playerAdvance from left-place is ok");
+  eq(a.state.phase, "resolve", "playerAdvance ends in resolve (no human right-place)");
+  assert(a.shouldResolve, "playerAdvance should resolve");
+  assert(a.plays.length >= 1, "bot made at least one play with starting gold");
+  a.plays.forEach(function (play) {
+    if (play.card === "cannon") return;
+    assert(play.cell >= 6, "bot " + play.card + " was placed on its own half (cell " + play.cell + ")");
+  });
+  a.state.units.filter(function (u) { return u.player === "right"; }).forEach(function (u) {
+    assert(u.cell >= 6, "bot unit " + u.type + " is on the right half after deploy");
+  });
+  a.state.traps.filter(function (t) { return t.player === "right"; }).forEach(function (t) {
+    assert(t.cell >= 6, "bot trap is on the right half");
+  });
+})();
+
+console.log("=== AI never places walkers or traps on the player half ===");
+(function () {
+  var s = R.createState();
+  // Give the bot something to react to on both halves
+  s = place(s, "left", "melee", 0, 5);
+  s = place(s, "left", "defense", 1, 4);
+  s.phase = "right-place";
+  // A left melee that has already crossed into the bot half (valid threat)
+  s.units.push({
+    id: s.nextId++,
+    type: "melee",
+    player: "left",
+    lane: 2,
+    cell: 8,
+    hp: 7,
+    maxHp: 7,
+    halted: false,
+    moveCharge: 0,
+  });
+  s.gold.right = 12;
+  var ai = R.applyAiPlacement(s);
+  assert(ai.plays.length >= 1, "bot spends some of its 12 gold");
+  ai.plays.forEach(function (play) {
+    if (play.card === "cannon") {
+      var target = R.unitAt(s, play.lane, play.cell) || R.unitAt(ai.state, play.lane, play.cell);
+      // Cannon may target the player's half; it must still hit an enemy (left) cell
+      assert(play.lane >= 0 && play.cell >= 0 && play.cell <= 11, "cannon target is on the board");
+      return;
+    }
+    assert(play.cell >= 6 && play.cell <= 11, "bot " + play.card + " not placed on player half (cell " + play.cell + ")");
+  });
+  ai.state.units.filter(function (u) { return u.player === "right"; }).forEach(function (u) {
+    assert(R.isOwnHalf("right", u.cell), "bot unit stayed on its half at deploy");
+  });
+  ai.state.traps.filter(function (t) { return t.player === "right"; }).forEach(function (t) {
+    assert(R.isOwnHalf("right", t.cell), "bot trap stayed on its half");
+  });
+  // Bot respects cooldowns: no duplicate of the same card in one deploy
+  var counts = {};
+  ai.plays.forEach(function (play) {
+    counts[play.card] = (counts[play.card] || 0) + 1;
+  });
+  Object.keys(counts).forEach(function (card) {
+    eq(counts[card], 1, "bot played " + card + " at most once (cooldown)");
+  });
+  var spent = 12 - ai.state.gold.right;
+  assert(spent >= 0 && ai.state.gold.right >= 0, "bot gold never went negative");
+  assert(spent <= 12, "bot did not spend more than it had");
+})();
+
+console.log("=== AI prefers melee on an under-defended lane ===");
+(function () {
+  var s = R.createState();
+  // Lane 0 well defended, lanes 1 and 2 empty — bot should send melee at 11 of a weak lane
+  s = place(s, "left", "defense", 0, 3);
+  s = place(s, "left", "melee", 0, 2);
+  var adv = R.playerAdvance(s);
+  var melees = adv.plays.filter(function (p) { return p.card === "melee"; });
+  assert(melees.length === 1, "bot sent one melee with starting gold / cooldown");
+  assert(melees[0].lane !== 0, "bot melee avoided the well-defended lane 0 (lane " + melees[0].lane + ")");
+  assert(melees[0].cell >= 6, "bot melee spawned on its own half");
 })();
 
 if (fails) {

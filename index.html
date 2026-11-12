@@ -11,12 +11,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Pirata+One&family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20261112pve" />
 </head>
 <body>
   <div id="app">
     <header id="hud">
       <div class="ship-hp left">
+        <span class="side-tag you">YOU</span>
         <span class="skull" aria-hidden="true">☠</span>
         <div class="bar-wrap">
           <div id="hp-left-bar" class="bar red"></div>
@@ -41,11 +42,12 @@
           <span id="hp-right-text" class="bar-text">40/40</span>
         </div>
         <span class="flag" aria-hidden="true">⚑</span>
+        <span class="side-tag bot">BOT</span>
       </div>
     </header>
 
-    <p id="help-line">Ranged stays on your half and can only shoot up to the midline.</p>
-    <p id="phase-line">Left pirate — select a card, then a green cell.</p>
+    <p id="help-line">You are the left pirate. The computer sends units down the 3 bridges. Ranged stays on your half and can only shoot up to the midline.</p>
+    <p id="phase-line">Your turn — select a card, then a green cell on your half. Tap ADVANCE when ready.</p>
 
     <div id="stage">
       <div id="board"></div>
@@ -59,24 +61,16 @@
     <div class="panel start-panel">
       <h1>海盜獨木橋對戰</h1>
       <h2>Pirate Bridge Battle</h2>
-      <p class="tag">Two players · one shared screen</p>
+      <p class="tag">Player vs Bot · PvZ-style</p>
       <ul class="blurb">
-        <li>3 bridges, 12 cells. Place only on your own half.</li>
-        <li>Left places, passes the device, then Right places.</li>
-        <li>Tap <strong>ADVANCE</strong> to fight, step, and earn 2 gold (max 12).</li>
+        <li>You are the <strong>left</strong> pirate. Place units only on your half.</li>
+        <li>The computer (navy) sends units down the 3 bridges toward your ship.</li>
+        <li>Tap <strong>ADVANCE</strong> to fight, walk, and earn 2 gold (max 12).</li>
         <li>Melee beats Ranged · Ranged beats Defense · Defense beats Melee.</li>
         <li><strong>Ranged stays on your half and can only shoot up to the midline.</strong></li>
       </ul>
       <button type="button" id="start-btn" class="big-btn">START</button>
       <p class="credits-mini">CC0 sprites · DezrasDragons, Disthron, Jason-Em</p>
-    </div>
-  </div>
-
-  <div id="overlay-pass" class="overlay">
-    <div class="panel">
-      <p id="pass-text" class="pass-title">Pass the device</p>
-      <p id="pass-sub">Hand it to the Right player.</p>
-      <button type="button" id="ready-btn" class="big-btn">READY</button>
     </div>
   </div>
 
@@ -89,7 +83,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
-  <script src="js/rules.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/rules.js?v=20261112pve"></script>
+  <script src="js/game.js?v=20261112pve"></script>
 </body>
 </html>
