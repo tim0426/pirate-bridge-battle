@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Pirate Bridge" />
+  <meta name="theme-color" content="#0b1c33" />
+  <title>海盜獨木橋對戰 · Pirate Bridge Battle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Pirata+One&family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div class="ship-hp left">
+        <span class="skull" aria-hidden="true">☠</span>
+        <div class="bar-wrap">
+          <div id="hp-left-bar" class="bar red"></div>
+          <span id="hp-left-text" class="bar-text">40/40</span>
+        </div>
+      </div>
+      <div class="gold-box left">
+        <span class="coin" aria-hidden="true">●</span>
+        <span id="gold-left">6/12</span>
+      </div>
+      <div id="turn-cluster">
+        <div id="turn-label">TURN 1</div>
+        <button type="button" id="advance-btn">DONE</button>
+      </div>
+      <div class="gold-box right">
+        <span class="coin" aria-hidden="true">●</span>
+        <span id="gold-right">6/12</span>
+      </div>
+      <div class="ship-hp right">
+        <div class="bar-wrap">
+          <div id="hp-right-bar" class="bar blue"></div>
+          <span id="hp-right-text" class="bar-text">40/40</span>
+        </div>
+        <span class="flag" aria-hidden="true">⚑</span>
+      </div>
+    </header>
+
+    <p id="help-line">Ranged stays on your half and can only shoot up to the midline.</p>
+    <p id="phase-line">Left pirate — select a card, then a green cell.</p>
+
+    <div id="stage">
+      <div id="board"></div>
+    </div>
+
+    <div id="cards" aria-label="Cards"></div>
+    <p id="rotate-hint">Tilt your phone sideways for a wider board.</p>
+  </div>
+
+  <div id="overlay-start" class="overlay show">
+    <div class="panel start-panel">
+      <h1>海盜獨木橋對戰</h1>
+      <h2>Pirate Bridge Battle</h2>
+      <p class="tag">Two players · one shared screen</p>
+      <ul class="blurb">
+        <li>3 bridges, 12 cells. Place only on your own half.</li>
+        <li>Left places, passes the device, then Right places.</li>
+        <li>Tap <strong>ADVANCE</strong> to fight, step, and earn 2 gold (max 12).</li>
+        <li>Melee beats Ranged · Ranged beats Defense · Defense beats Melee.</li>
+        <li><strong>Ranged stays on your half and can only shoot up to the midline.</strong></li>
+      </ul>
+      <button type="button" id="start-btn" class="big-btn">START</button>
+      <p class="credits-mini">CC0 sprites · DezrasDragons, Disthron, Jason-Em</p>
+    </div>
+  </div>
+
+  <div id="overlay-pass" class="overlay">
+    <div class="panel">
+      <p id="pass-text" class="pass-title">Pass the device</p>
+      <p id="pass-sub">Hand it to the Right player.</p>
+      <button type="button" id="ready-btn" class="big-btn">READY</button>
+    </div>
+  </div>
+
+  <div id="overlay-end" class="overlay">
+    <div class="panel">
+      <p id="end-title" class="pass-title">Victory</p>
+      <p id="end-sub">The enemy ship is sunk.</p>
+      <button type="button" id="again-btn" class="big-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

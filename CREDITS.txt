@@ -1,0 +1,22 @@
+Pirate Bridge Battle — prototype characters (same pixel style, already animated)
+License: CC0 (public domain). Credit appreciated, not required.
+
+1. Melee — Classic Pirate Captain (run)
+   DezrasDragons, based on Jason-Em / GrafxKid Classic Hero
+   https://opengameart.org/content/classic-pirate-captain-animated
+
+2. Defense — Classic-Knight (walk)
+   Disthron, edit of Jason-Em Classic Hero
+   https://opengameart.org/content/classic-knight-animated
+
+3. Ranged — Ye Oldy Musket Guy (walk + shoot)
+   Disthron
+   https://opengameart.org/content/ye-oldy-musket-guy-animated
+
+4. Cannon — Musketeer Officer & Cannon (cannon frames + muzzle flash)
+   Disthron
+   https://opengameart.org/content/musketeer-officer-cannon-animated
+
+5. Trap — spikes from Items and Elements
+   Jason-Em (GrafxKid)
+   https://opengameart.org/content/items-and-elements
